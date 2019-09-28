@@ -1,0 +1,183 @@
+version: '3'
+services:
+   elasticsearch_n0:
+      image: elasticsearch:7.3.2
+      container_name: elasticsearch_n0
+      restart: always
+      privileged: true
+      environment:
+      - node.name=node0
+      - cluster.name=elasticsearch-cluster
+      - cluster.initial_master_nodes=node0
+      - node.master=true
+      - node.data=true
+      - network.host=0.0.0.0
+      - bootstrap.memory_lock=true
+      - http.cors.enabled=true
+      - http.cors.allow-origin=*
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "discovery.zen.ping.unicast.hosts=elasticsearch_n0,elasticsearch_n1,elasticsearch_n2"
+      - "discovery.zen.minimum_master_nodes=2"
+      ulimits:
+         nproc: 65535
+         memlock:
+            soft: -1
+            hard: -1
+      volumes:
+      - ./data/node0:/usr/share/elasticsearch/data
+      - ./logs/node0:/usr/share/elasticsearch/logs
+      - ./ik/custom:/usr/share/elasticsearch/plugins/ik/custom \
+      - ./ik/IKAnalyzer.cfg.xml:/usr/share/elasticsearch/plugins/ik/config/IKAnalyzer.cfg.xml \
+      networks:
+      - esnet
+      ports:
+      - 9200:9200
+      - 9300:9300
+      deploy:
+         resources:
+            limits:
+               memory: 24G
+            reservations:
+               memory: 256M
+         restart_policy:
+            condition: on-failure
+            delay: 5s
+            max_attempts: 3
+            window: 10s
+   elasticsearch_n1:
+      image: elasticsearch:7.3.2
+      container_name: elasticsearch_n1
+      restart: always
+      privileged: true
+      environment:
+      - cluster.name=elasticsearch-cluster
+      - cluster.initial_master_nodes=node0
+      - node.name=node1
+      - node.master=true
+      - node.data=true
+      - network.host=0.0.0.0
+      - bootstrap.memory_lock=true
+      - http.cors.enabled=true
+      - http.cors.allow-origin=*
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "discovery.zen.ping.unicast.hosts=elasticsearch_n0,elasticsearch_n1,elasticsearch_n2"
+      - "discovery.zen.minimum_master_nodes=2"
+      ulimits:
+         nproc: 65535
+         memlock:
+            soft: -1
+            hard: -1
+      volumes:
+      - ./data/node1:/usr/share/elasticsearch/data
+      - ./logs/node1:/usr/share/elasticsearch/logs
+      networks:
+      - esnet
+      ports:
+      - 9201:9200
+      - 9301:9300
+      deploy:
+         resources:
+            limits:
+               memory: 24G
+            reservations:
+               memory: 256M
+         restart_policy:
+            condition: on-failure
+            delay: 5s
+            max_attempts: 3
+            window: 10s
+   elasticsearch_n2:
+      image: elasticsearch:7.3.2
+      container_name: elasticsearch_n2
+      restart: always
+      privileged: true
+      environment:
+      - cluster.name=elasticsearch-cluster
+      - cluster.initial_master_nodes=node0
+      - node.name=node2
+      - node.master=true
+      - node.data=true
+      - network.host=0.0.0.0
+      - bootstrap.memory_lock=true
+      - http.cors.enabled=true
+      - http.cors.allow-origin=*
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "discovery.zen.ping.unicast.hosts=elasticsearch_n0,elasticsearch_n1,elasticsearch_n2"
+      - "discovery.zen.minimum_master_nodes=2"
+      ulimits:
+         nproc: 65535
+         memlock:
+            soft: -1
+            hard: -1
+      volumes:
+      - ./data/node2:/usr/share/elasticsearch/data
+      - ./logs/node2:/usr/share/elasticsearch/logs
+      networks:
+      - esnet
+      ports:
+      - 9202:9200
+      - 9302:9300
+      deploy:
+         replicas: 1
+         resources:
+            limits:
+               memory: 24G
+            reservations:
+               memory: 256M
+         restart_policy:
+            condition: on-failure
+            delay: 5s
+            max_attempts: 3
+            window: 10s
+   kibana:
+      image: docker.elastic.co/kibana/kibana:7.3.2
+      container_name: kibana
+      restart: always
+      environment:
+         server.port: 5601
+         server.host: 0.0.0.0
+         SERVER_NAME: kibana
+         ELASTICSEARCH_HOSTS: http://elasticsearch_n0:9200/
+      networks:
+      - esnet
+      ports:
+      - 5601:5601
+      volumes:
+      - ./logs/kibana:/var/log
+      ulimits:
+         nproc: 65535
+         memlock:
+            soft: -1
+            hard: -1
+      cap_add:
+      - ALL
+   auditbeat:
+      image: docker.elastic.co/beats/auditbeat:7.3.2
+      command: auditbeat -e -strict.perms=false
+      restart: always
+      user: root
+      environment:
+         ELASTICSEARCH_HOSTS: http://elasticsearch_n0:9200/
+      cap_add: ['AUDIT_CONTROL', 'AUDIT_READ']
+      pid: "host"
+      volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      networks:
+      - esnet
+   metricbeat:
+      image: docker.elastic.co/beats/metricbeat:7.3.2
+      restart: always
+      environment:
+         ELASTICSEARCH_HOSTS: http://elasticsearch_n0:9200/
+      cap_add:
+      - AUDIT_CONTROL
+      - AUDIT_READ
+      volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys/fs/cgroup:/hostfs/sys/fs/cgroup:ro
+      - /proc:/hostfs/proc:ro
+      - /:/hostfs:ro
+      networks:
+      - esnet
+networks:
+  esnet:
